@@ -94,6 +94,7 @@ struct mission_status {
 
 struct vehicle_status {
   bool start = false; // vehicle mission start/stop status
+  bool pause = false; // vehicle will maintain current position if true
   bool role_changed = false; // if role_changes, clear all wps and POI
   unsigned int role = 0;
   double lat;
@@ -205,7 +206,15 @@ void CallbackFunction(XBEE::Frame *item) {
       vehicle_status.role_changed = true;
       std::cerr << "Role Set as: " << vehicle_status.role << std::endl;
 
-    } else valid_msg = false;
+    }
+    else if (!strcmp(msg_components[1].c_str(), "PAUSE") && valid_msg){
+      // Expect Msg : "NEWMSG,PAUSE,QX,0" (unpaused)
+      //              "NEWMSG,PAUSE,QX,1" (paused)
+      if (std::stoi(msg_components[3].c_str())==1)
+        vehicle_status.pause=true;
+        else vehicle_status.pause=false;
+    }
+    else valid_msg = false;
   }
 
   // If msg was invalid, output error msg to screen
@@ -333,7 +342,7 @@ int mainLoop(processInterface *PNav, configContainer *configs) {
 
     // set current wp
     ndx = mission_waypoints.current_wp;
-    if (update_setpoint && (ndx < mission_waypoints.wps.size()) && !vehicle_status.role) {
+    if (update_setpoint && (ndx < mission_waypoints.wps.size()) && !vehicle_status.role && !vehicle_status.pause) {
       set_position(mission_waypoints.wps[ndx][0],
               mission_waypoints.wps[ndx][1],
               mission_waypoints.wps[ndx][2], sp);
@@ -386,7 +395,13 @@ int mainLoop(processInterface *PNav, configContainer *configs) {
       mission_status.changed_flag = false;
 
       // calculate wp
-      if (!vehicle_status.role) { // if Quick Search Mission
+      if (vehicle_status.pause){ // sets position to current position (LNED) if vehicle is paused
+        set_position(lpos.x,
+                lpos.y,
+                lpos.z, sp);
+        autopilot_interface.update_setpoint(sp);
+      }
+      else if (!vehicle_status.role) { // if Quick Search Mission
         start_coordLLA << (float) mission_status.lat, (float) mission_status.lon, configs->alt;
         start_coordLLA[0] = start_coordLLA[0] * M_PI / 180.0; // convert from deg2rad
         start_coordLLA[1] = start_coordLLA[1] * M_PI / 180.0;
@@ -418,6 +433,7 @@ int mainLoop(processInterface *PNav, configContainer *configs) {
       vehicle_status.gcs_update = "NEWMSG,UPDT,Q" + std::to_string(configs->quad_id) + ",P" +
               std::to_string(vehicle_status.lat) + ":" +
               std::to_string(vehicle_status.lon) + ":" + std::to_string(vehicle_status.alt) +
+              ",V" + std::to_string(lpos.vx) + ":" + std::to_string(lpos.vy) + ":" std::to_string(lpos.vz) +
               ",S" + vehicle_status.status + ",R" + std::to_string(vehicle_status.role);
       UpdateGCS(xbee_interface);
       t0_heartbeat = steady_clock::now();

@@ -65,7 +65,7 @@ public:
     Vector3d originLLA;
     Matrix3d Rne; // ECEF to LocalNED rotation matrix
     Matrix3d Rne_transpose; // LocalNED to ECEF rotation matrix
-    
+
     std::map<std::string, void*> misc_Params; // store all other input params
 private:
 

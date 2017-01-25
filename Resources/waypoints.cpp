@@ -240,6 +240,10 @@ void waypoints::SetPOI(coordLocalNED coord) {
   POI.push_back(coord);
 }
 
+void waypoints::Push_Front(coordLocalNED coord){
+  wps.insert(0, coord);
+}
+
 void waypoints::ClearMission() {
   wps.clear();
   POI.clear();
